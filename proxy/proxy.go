@@ -4,24 +4,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 )
 
 type Proxy struct {
-	server  *http.Server
-	client  *http.Client
-	backend *url.URL
+	server *http.Server
+	client BackendClient
+	config *Config
 }
 
-func NewProxy() *Proxy {
-	backend, err := url.Parse("http://localhost:8081")
-	if err != nil {
-		panic(err)
-	}
+func NewProxy(config *Config, bc BackendClient) *Proxy {
 	return &Proxy{
-		server:  &http.Server{Addr: ":8080"},
-		client:  &http.Client{},
-		backend: backend,
+		server: &http.Server{Addr: fmt.Sprintf(":%d", config.Port)},
+		client: bc,
+		config: config,
 	}
 }
 
@@ -36,13 +31,18 @@ func (p *Proxy) Start() error {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.RequestURI = ""
-	r.URL.Scheme = p.backend.Scheme
-	r.URL.Host = p.backend.Host
-	r.URL.Path = p.backend.Path + r.URL.Path
-	r.Host = ""
+	serverReq := ServerRequest{r}
+	backendGroup, err := p.getBackendGroup(serverReq)
+	if err != nil {
+		fmt.Println("Error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	resp, err := p.client.Do(r)
+	targetBackend := backendGroup.Lb.Next()
+
+	clientReq := serverReq.ToClientRequest(targetBackend)
+	resp, err := p.client.Do(clientReq)
 	if err != nil {
 		fmt.Println("Error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -51,4 +51,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+}
+
+func (p *Proxy) getBackendGroup(r ServerRequest) (*BackendGroup, error) {
+	// for now, the proxy handles only one backend group
+	return p.config.BackendGroups[0], nil
 }
