@@ -1,0 +1,31 @@
+port: 8080
+backend_groups:
+  - name: group1
+    load_balancing: round_robin
+    servers:
+      - backend1.example.com
+      - backend2.example.com
+  - name: group2
+    load_balancing: least_conn
+    servers:
+      - backend3.example.com
+      - backend4.example.com
+domains:
+  - name: example.com
+    paths:
+      - name: /api
+        backend_group: group1
+        request_operations:
+          - type: add_header
+            name: X-Custom-Header
+            value: MyValue
+          - type: modify_path
+            action: prepend
+            value: /v1
+          - type: remove_query_param
+            name: debug
+      - name: /static
+        backend_group: group2
+        response_operations:
+          - type: remove_header
+            name: X-Powered-By
