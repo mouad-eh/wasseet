@@ -53,14 +53,17 @@ func (p *Proxy) Stop() error {
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	serverReq := ServerRequest{r}
-	backendGroup, err := p.getBackendGroup(serverReq)
+
+	rule, err := p.config.GetFirstMatchingRule(serverReq)
 	if err != nil {
 		fmt.Println("Error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	targetBackend := backendGroup.Lb.Next()
+	rule.ApplyRequestOperations(serverReq)
+
+	targetBackend := rule.BackendGroup.Lb.Next()
 
 	clientReq := serverReq.ToClientRequest(targetBackend)
 	resp, err := p.client.Do(clientReq)
@@ -70,11 +73,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	rule.ApplyResponseOperations(resp)
+
+	for header, values := range resp.Header {
+		w.Header()[header] = values
+	}
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
-}
-
-func (p *Proxy) getBackendGroup(r ServerRequest) (*BackendGroup, error) {
-	// for now, the proxy handles only one backend group
-	return p.config.BackendGroups[0], nil
 }

@@ -38,7 +38,14 @@ func TestRoundRobinLoadBalancing(t *testing.T) {
 				Servers: backendUrls,
 			},
 		},
+		Rules: []*proxy.Rule{
+			{
+				Path:         "",
+				BackendGroup: nil, // Will be set after
+			},
+		},
 	}
+	proxyConfig.Rules[0].BackendGroup = proxyConfig.BackendGroups[0]
 
 	// start the proxy in a separate goroutine
 	proxyServer := proxy.NewProxy(proxyConfig, &proxy.HttpClient{Client: &http.Client{}})

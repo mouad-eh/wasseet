@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProxyHandler(t *testing.T) {
+func TestRequestAndResponseForwarding(t *testing.T) {
 	backend := &url.URL{Scheme: "http", Host: "backend.io", Path: "/"}
 
 	config := &proxy.Config{
@@ -22,9 +22,21 @@ func TestProxyHandler(t *testing.T) {
 				Servers: []*url.URL{backend},
 			},
 		},
+		Rules: []*proxy.Rule{
+			{
+				Path:         "",
+				BackendGroup: nil, // Will be set after
+			},
+		},
 	}
+	config.Rules[0].BackendGroup = config.BackendGroups[0]
 
-	beClient := NewMockBackendClient(backend)
+	beClient := &MockBackendClient{
+		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(backend.String()))
+		}),
+	}
 	p := proxy.NewProxy(config, beClient)
 
 	req := httptest.NewRequest("GET", "http://proxy.io", nil)
@@ -36,6 +48,54 @@ func TestProxyHandler(t *testing.T) {
 
 	body, _ := io.ReadAll(resp.Body)
 	require.Equal(t, backend.String(), string(body))
+}
+
+func TestRequestAndResponseMutation(t *testing.T) {
+	backend := &url.URL{Scheme: "http", Host: "backend.io", Path: "/"}
+
+	config := &proxy.Config{
+		BackendGroups: []*proxy.BackendGroup{
+			{
+				Lb:      &NoopLoadBalancer{Backend: backend},
+				Name:    "default",
+				Servers: []*url.URL{backend},
+			},
+		},
+		Rules: []*proxy.Rule{
+			{
+				BackendGroup: nil, // Will be set after
+				RequestOperations: []proxy.RequestOperation{
+					&proxy.AddHeaderRequestOperation{Header: "X-Custom-Request", Value: "request-value"},
+				},
+				ResponseOperations: []proxy.ResponseOperation{
+					&proxy.AddHeaderResponseOperation{Header: "X-Custom-Response", Value: "response-value"},
+				},
+			},
+		},
+	}
+	config.Rules[0].BackendGroup = config.BackendGroups[0]
+
+	// Create a backend client that captures the request
+	var capturedRequest *http.Request
+	backendClient := &MockBackendClient{
+		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedRequest = r
+			w.WriteHeader(http.StatusOK)
+		}),
+	}
+
+	p := proxy.NewProxy(config, backendClient)
+
+	req := httptest.NewRequest("GET", "http://proxy.io", nil)
+	w := httptest.NewRecorder()
+	p.ServeHTTP(w, req)
+
+	resp := w.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	require.NotNil(t, capturedRequest)
+	require.Equal(t, "request-value", capturedRequest.Header.Get("X-Custom-Request"))
+	require.Equal(t, "response-value", resp.Header.Get("X-Custom-Response"))
 }
 
 type NoopLoadBalancer struct {
@@ -64,10 +124,6 @@ func NewMockBackendClient(backend *url.URL) *MockBackendClient {
 
 func (m *MockBackendClient) Do(req proxy.ClientRequest) (*http.Response, error) {
 	w := httptest.NewRecorder()
-
-	// // adapt client Request object so that it can be used by the handler
-	// handlerCompatibleReq := httptest.NewRequest(req.Method, req.URL.String(), req.Body)
-	// handlerCompatibleReq.Header = req.Header.Clone()
 
 	serverReq := req.ToServerRequest()
 	handlerCompatibleReq := serverReq.Request
