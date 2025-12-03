@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/testutils/mocks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,33 +99,25 @@ func TestRuleMatch(t *testing.T) {
 	}
 }
 
-type mockRequestOperation struct {
-	callCount int
-}
-
-func (m *mockRequestOperation) Apply(req proxy.ServerRequest) {
-	m.callCount++
-}
-
 func TestApplyRequestOperations(t *testing.T) {
 	tests := []struct {
-		name              string
-		operations        []proxy.RequestOperation
-		expectedCallCount int
+		name                   string
+		operations             []proxy.RequestOperation
+		expectedApplyCallCount int
 	}{
 		{
-			name:              "zero operations",
-			operations:        []proxy.RequestOperation{},
-			expectedCallCount: 0,
+			name:                   "zero operations",
+			operations:             []proxy.RequestOperation{},
+			expectedApplyCallCount: 0,
 		},
 		{
 			name: "multiple operations",
 			operations: []proxy.RequestOperation{
-				&mockRequestOperation{},
-				&mockRequestOperation{},
-				&mockRequestOperation{},
+				&mocks.RequestOperationMock{},
+				&mocks.RequestOperationMock{},
+				&mocks.RequestOperationMock{},
 			},
-			expectedCallCount: 3,
+			expectedApplyCallCount: 3,
 		},
 	}
 
@@ -141,22 +134,14 @@ func TestApplyRequestOperations(t *testing.T) {
 			// Count the actual calls made
 			callCount := 0
 			for _, op := range tt.operations {
-				if mock, ok := op.(*mockRequestOperation); ok {
-					callCount += mock.callCount
+				if mock, ok := op.(*mocks.RequestOperationMock); ok {
+					callCount += len(mock.ApplyCalls())
 				}
 			}
 
-			require.Equal(t, tt.expectedCallCount, callCount)
+			require.Equal(t, tt.expectedApplyCallCount, callCount)
 		})
 	}
-}
-
-type mockResponseOperation struct {
-	callCount int
-}
-
-func (m *mockResponseOperation) Apply(resp *http.Response) {
-	m.callCount++
 }
 
 func TestApplyResponseOperations(t *testing.T) {
@@ -173,9 +158,9 @@ func TestApplyResponseOperations(t *testing.T) {
 		{
 			name: "multiple operations",
 			operations: []proxy.ResponseOperation{
-				&mockResponseOperation{},
-				&mockResponseOperation{},
-				&mockResponseOperation{},
+				&mocks.ResponseOperationMock{},
+				&mocks.ResponseOperationMock{},
+				&mocks.ResponseOperationMock{},
 			},
 			expectedCallCount: 3,
 		},
@@ -195,8 +180,8 @@ func TestApplyResponseOperations(t *testing.T) {
 			// Count the actual calls made
 			callCount := 0
 			for _, op := range tt.operations {
-				if mock, ok := op.(*mockResponseOperation); ok {
-					callCount += mock.callCount
+				if mock, ok := op.(*mocks.ResponseOperationMock); ok {
+					callCount += len(mock.ApplyCalls())
 				}
 			}
 

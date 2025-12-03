@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/testutils/mocks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ func TestRequestAndResponseForwarding(t *testing.T) {
 	config := &proxy.Config{
 		BackendGroups: []*proxy.BackendGroup{
 			{
-				Lb:      &NoopLoadBalancer{Backend: backend},
+				Lb:      &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }},
 				Name:    "default",
 				Servers: []*url.URL{backend},
 			},
@@ -31,12 +32,12 @@ func TestRequestAndResponseForwarding(t *testing.T) {
 	}
 	config.Rules[0].BackendGroup = config.BackendGroups[0]
 
-	beClient := &MockBackendClient{
-		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	beClient := NewBackendClientMock(
+		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(backend.String()))
-		}),
-	}
+		},
+	)
 	p := proxy.NewProxy(config, beClient)
 
 	req := httptest.NewRequest("GET", "http://proxy.io", nil)
@@ -56,7 +57,7 @@ func TestRequestAndResponseMutation(t *testing.T) {
 	config := &proxy.Config{
 		BackendGroups: []*proxy.BackendGroup{
 			{
-				Lb:      &NoopLoadBalancer{Backend: backend},
+				Lb:      &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }},
 				Name:    "default",
 				Servers: []*url.URL{backend},
 			},
@@ -77,12 +78,10 @@ func TestRequestAndResponseMutation(t *testing.T) {
 
 	// Create a backend client that captures the request
 	var capturedRequest *http.Request
-	backendClient := &MockBackendClient{
-		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedRequest = r
-			w.WriteHeader(http.StatusOK)
-		}),
-	}
+	backendClient := NewBackendClientMock(func(w http.ResponseWriter, r *http.Request) {
+		capturedRequest = r
+		w.WriteHeader(http.StatusOK)
+	})
 
 	p := proxy.NewProxy(config, backendClient)
 
@@ -98,37 +97,17 @@ func TestRequestAndResponseMutation(t *testing.T) {
 	require.Equal(t, "response-value", resp.Header.Get("X-Custom-Response"))
 }
 
-type NoopLoadBalancer struct {
-	Backend *url.URL
-}
+func NewBackendClientMock(handler http.HandlerFunc) *mocks.BackendClientMock {
+	return &mocks.BackendClientMock{
+		DoFunc: func(clientRequest proxy.ClientRequest) (*http.Response, error) {
+			w := httptest.NewRecorder()
 
-func (m *NoopLoadBalancer) Next() *url.URL {
-	return m.Backend
-}
+			serverReq := clientRequest.ToServerRequest()
+			handlerCompatibleReq := serverReq.Request
 
-// MockBackendClient is a mock implementation of BackendClient interface.
-//
-// It returns a response with 200 OK and the backend URL as the body.
-type MockBackendClient struct {
-	handler http.HandlerFunc
-}
+			handler(w, handlerCompatibleReq)
 
-func NewMockBackendClient(backend *url.URL) *MockBackendClient {
-	return &MockBackendClient{
-		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(backend.String()))
-		}),
+			return w.Result(), nil
+		},
 	}
-}
-
-func (m *MockBackendClient) Do(req proxy.ClientRequest) (*http.Response, error) {
-	w := httptest.NewRecorder()
-
-	serverReq := req.ToServerRequest()
-	handlerCompatibleReq := serverReq.Request
-
-	m.handler(w, handlerCompatibleReq)
-
-	return w.Result(), nil
 }

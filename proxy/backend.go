@@ -4,6 +4,8 @@ import (
 	"net/http"
 )
 
+//go:generate moq -pkg mocks -out ../testutils/mocks/backend_client.go .  BackendClient
+
 // This interface is implemented by http.Client.
 //
 // The Proxy relies on it instead of relying directly on an http.Client

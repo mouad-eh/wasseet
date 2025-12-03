@@ -68,6 +68,8 @@ func (r *Rule) ApplyResponseOperations(resp *http.Response) {
 	}
 }
 
+//go:generate moq -stub -pkg mocks -out ../testutils/mocks/operation.go .  RequestOperation ResponseOperation
+
 type RequestOperation interface {
 	Apply(req ServerRequest)
 }
