@@ -57,7 +57,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rule, err := p.config.GetFirstMatchingRule(serverReq)
 	if err != nil {
 		fmt.Println("Error:", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 

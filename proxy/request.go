@@ -20,7 +20,7 @@ func (r ServerRequest) ToClientRequest(backend *url.URL) ClientRequest {
 	r.Request.RequestURI = ""
 	r.Request.URL.Scheme = backend.Scheme
 	r.Request.URL.Host = backend.Host
-	r.Request.URL.Path = backend.Path + r.URL.Path
+	r.Request.URL.Path = r.URL.Path
 	r.Request.Host = backend.Host
 	return ClientRequest(r)
 }

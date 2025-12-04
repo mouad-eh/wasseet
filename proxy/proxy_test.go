@@ -12,25 +12,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequestAndResponseForwarding(t *testing.T) {
-	backend := &url.URL{Scheme: "http", Host: "backend.io", Path: "/"}
+func TestNoRuleMatchesRequest(t *testing.T) {
+	backend := &url.URL{Scheme: "http", Host: "backend.io"}
+
+	backendGroup := &proxy.BackendGroup{
+		Lb:      &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }},
+		Servers: []*url.URL{backend},
+	}
 
 	config := &proxy.Config{
-		BackendGroups: []*proxy.BackendGroup{
-			{
-				Lb:      &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }},
-				Name:    "default",
-				Servers: []*url.URL{backend},
-			},
-		},
+		BackendGroups: []*proxy.BackendGroup{backendGroup},
 		Rules: []*proxy.Rule{
 			{
-				Path:         "",
-				BackendGroup: nil, // Will be set after
+				Path:         "/baz",
+				BackendGroup: backendGroup,
 			},
 		},
 	}
-	config.Rules[0].BackendGroup = config.BackendGroups[0]
 
 	beClient := NewBackendClientMock(
 		func(w http.ResponseWriter, r *http.Request) {
@@ -40,62 +38,79 @@ func TestRequestAndResponseForwarding(t *testing.T) {
 	)
 	p := proxy.NewProxy(config, beClient)
 
-	req := httptest.NewRequest("GET", "http://proxy.io", nil)
+	req := httptest.NewRequest("GET", "http://proxy.io/foo", nil)
 	w := httptest.NewRecorder()
 	p.ServeHTTP(w, req)
 
 	resp := w.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, _ := io.ReadAll(resp.Body)
-	require.Equal(t, backend.String(), string(body))
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestRequestAndResponseMutation(t *testing.T) {
-	backend := &url.URL{Scheme: "http", Host: "backend.io", Path: "/"}
+func TestRuleMatchesRequest(t *testing.T) {
+	backend := &url.URL{Scheme: "http", Host: "backend.io"}
 
+	loadBalancer := &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }}
+
+	backendGroup := &proxy.BackendGroup{
+		Lb:      loadBalancer,
+		Servers: []*url.URL{backend},
+	}
+
+	requestOperation := &mocks.RequestOperationMock{}
+	responseOperation := &mocks.ResponseOperationMock{}
 	config := &proxy.Config{
-		BackendGroups: []*proxy.BackendGroup{
-			{
-				Lb:      &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }},
-				Name:    "default",
-				Servers: []*url.URL{backend},
-			},
-		},
+		BackendGroups: []*proxy.BackendGroup{backendGroup},
 		Rules: []*proxy.Rule{
 			{
-				BackendGroup: nil, // Will be set after
+				Path:         "/foo",
+				BackendGroup: backendGroup,
 				RequestOperations: []proxy.RequestOperation{
-					&proxy.AddHeaderRequestOperation{Header: "X-Custom-Request", Value: "request-value"},
+					requestOperation,
 				},
 				ResponseOperations: []proxy.ResponseOperation{
-					&proxy.AddHeaderResponseOperation{Header: "X-Custom-Response", Value: "response-value"},
+					responseOperation,
 				},
 			},
 		},
 	}
-	config.Rules[0].BackendGroup = config.BackendGroups[0]
 
-	// Create a backend client that captures the request
-	var capturedRequest *http.Request
-	backendClient := NewBackendClientMock(func(w http.ResponseWriter, r *http.Request) {
-		capturedRequest = r
-		w.WriteHeader(http.StatusOK)
-	})
+	beClient := NewBackendClientMock(
+		func(w http.ResponseWriter, r *http.Request) {
+			// set specific headers to allow request-response binding
+			w.Header().Set("Request-Method", r.Method)
+			w.Header().Set("Request-Path", r.URL.Path)
 
-	p := proxy.NewProxy(config, backendClient)
+			w.Write([]byte(backend.String()))
+		},
+	)
 
-	req := httptest.NewRequest("GET", "http://proxy.io", nil)
+	p := proxy.NewProxy(config, beClient)
+
+	req := httptest.NewRequest("GET", "http://proxy.io/foo", nil)
 	w := httptest.NewRecorder()
 	p.ServeHTTP(w, req)
+
+	require.Equal(t, 1, len(loadBalancer.NextCalls()))
+
+	require.Equal(t, 1, len(requestOperation.ApplyCalls()))
+	require.Equal(t, "/foo", requestOperation.ApplyCalls()[0].Req.URL.Path)
+
+	require.Equal(t, 1, len(beClient.DoCalls()))
+	require.Equal(t, backend.Host, beClient.DoCalls()[0].ClientRequest.URL.Host)
+
+	require.Equal(t, 1, len(responseOperation.ApplyCalls()))
+	require.Equal(t, req.Method, responseOperation.ApplyCalls()[0].Resp.Header["Request-Method"][0])
+	require.Equal(t, req.URL.Path, responseOperation.ApplyCalls()[0].Resp.Header["Request-Path"][0])
 
 	resp := w.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	require.NotNil(t, capturedRequest)
-	require.Equal(t, "request-value", capturedRequest.Header.Get("X-Custom-Request"))
-	require.Equal(t, "response-value", resp.Header.Get("X-Custom-Response"))
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, string(body), backend.String())
 }
+
+//TODO: After implementing backend healthchecks, add test for http client error
 
 func NewBackendClientMock(handler http.HandlerFunc) *mocks.BackendClientMock {
 	return &mocks.BackendClientMock{
