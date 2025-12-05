@@ -29,7 +29,7 @@ func (c *Config) GetFirstMatchingRule(req ServerRequest) (*Rule, error) {
 			return rule, nil
 		}
 	}
-	return nil, fmt.Errorf("no matching rule found for request: %v", req)
+	return nil, fmt.Errorf("no matching rule found for request")
 }
 
 type BackendGroup struct {

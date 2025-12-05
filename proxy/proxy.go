@@ -6,6 +6,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Proxy struct {
@@ -13,13 +16,32 @@ type Proxy struct {
 	listener net.Listener
 	server   *http.Server
 	client   BackendClient
+	logger   *zap.SugaredLogger
 }
 
 func NewProxy(config *Config, bc BackendClient) *Proxy {
+	loggerConfig := zap.Config{
+		Level:       zap.NewAtomicLevelAt(zap.DebugLevel),
+		Development: true,
+		Encoding:    "json",
+		EncoderConfig: zapcore.EncoderConfig{
+			// TimeKey:      "timestamp",
+			LevelKey: "level",
+			// CallerKey:    "caller",
+			MessageKey:  "msg",
+			EncodeLevel: zapcore.LowercaseLevelEncoder,
+			// EncodeTime:   zapcore.RFC3339TimeEncoder,
+			// EncodeCaller: zapcore.ShortCallerEncoder,
+		},
+		OutputPaths: []string{"stdout"},
+	}
+
+	logger, _ := loggerConfig.Build()
 	return &Proxy{
 		server: &http.Server{},
 		client: bc,
 		config: config,
+		logger: logger.Sugar(),
 	}
 }
 
@@ -35,7 +57,7 @@ func (p *Proxy) Start() error {
 	p.listener = listener
 
 	if err := p.server.Serve(listener); err != nil {
-		return fmt.Errorf("failed to start http server: %w", err)
+		return err
 	}
 	return nil
 }
@@ -56,7 +78,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rule, err := p.config.GetFirstMatchingRule(serverReq)
 	if err != nil {
-		fmt.Println("Error:", err)
+		p.logger.Errorw(err.Error(), "request_type", "server",
+			"request_method", r.Method, "request_path", r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -68,7 +91,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientReq := serverReq.ToClientRequest(targetBackend)
 	resp, err := p.client.Do(clientReq)
 	if err != nil {
-		fmt.Println("Error:", err)
+		p.logger.Errorw(err.Error(), "request_type", "client",
+			"request_method", r.Method, "request_url", r.URL.String())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
