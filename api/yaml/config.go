@@ -2,7 +2,11 @@ package yaml
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
+
+	"github.com/mouad-eh/wasseet/loadbalancer"
+	"github.com/mouad-eh/wasseet/proxy"
 )
 
 type Config struct {
@@ -34,6 +38,74 @@ type Rule struct {
 	BackendGroup       string                     `yaml:"backend_group"`
 	RequestOperations  []RequestOperationWrapper  `yaml:"request_operations"`  // Optional
 	ResponseOperations []ResponseOperationWrapper `yaml:"response_operations"` // Optional
+}
+
+func (c *Config) Resolve() proxy.Config {
+	// Build a map of backend groups by name for easy lookup
+	proxyBGMap := make(map[string]*proxy.BackendGroup)
+
+	for _, bg := range c.BackendGroups {
+		// Parse server URLs
+		servers := make([]*url.URL, len(bg.Servers))
+		for i, server := range bg.Servers {
+			u, _ := url.Parse("http://" + server)
+			servers[i] = u
+		}
+
+		// Create the appropriate load balancer based on type
+		var lb loadbalancer.LoadBalancer
+		switch bg.LoadBalancing {
+		case RoundRobin:
+			lb = loadbalancer.NewRoundRobin(servers)
+		}
+
+		proxyBG := &proxy.BackendGroup{
+			Name:    bg.Name,
+			Lb:      lb,
+			Servers: servers,
+		}
+		proxyBGMap[bg.Name] = proxyBG
+	}
+
+	// Convert rules
+	proxyRules := make([]*proxy.Rule, len(c.Rules))
+	for i, rule := range c.Rules {
+		// Convert request operations
+		requestOps := make([]proxy.RequestOperation, len(rule.RequestOperations))
+		for j, op := range rule.RequestOperations {
+			requestOps[j] = op.Operation.Resolve()
+		}
+
+		// Convert response operations
+		responseOps := make([]proxy.ResponseOperation, len(rule.ResponseOperations))
+		for j, op := range rule.ResponseOperations {
+			responseOps[j] = op.Operation.Resolve()
+		}
+
+		path := rule.Path
+		if path == "/" {
+			path = ""
+		}
+		proxyRules[i] = &proxy.Rule{
+			Host:               rule.Host,
+			Path:               path,
+			BackendGroup:       proxyBGMap[rule.BackendGroup],
+			RequestOperations:  requestOps,
+			ResponseOperations: responseOps,
+		}
+	}
+
+	// Build resolved backend groups slice in the same order as input
+	proxyBGs := make([]*proxy.BackendGroup, len(c.BackendGroups))
+	for i, bg := range c.BackendGroups {
+		proxyBGs[i] = proxyBGMap[bg.Name]
+	}
+
+	return proxy.Config{
+		Port:          c.Port,
+		BackendGroups: proxyBGs,
+		Rules:         proxyRules,
+	}
 }
 
 func (c *Config) Validate() error {

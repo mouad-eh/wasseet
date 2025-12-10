@@ -1,8 +1,0 @@
-port: 8080
-backend_groups:
-  - name: backend1
-    servers:
-      - invalid-server
-rules:
-  - path: /api
-    backend_group: nonexistent_group

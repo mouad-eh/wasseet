@@ -8,13 +8,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type ValidatableResponseOperation interface {
-	proxy.ResponseOperation
+type IResponseOperation interface {
 	Validate() error
+	Resolve() proxy.ResponseOperation
 }
 
 type ResponseOperationWrapper struct {
-	Operation ValidatableResponseOperation
+	Operation IResponseOperation
 }
 
 func (w *ResponseOperationWrapper) UnmarshalYAML(node *yaml.Node) error {
@@ -27,7 +27,7 @@ func (w *ResponseOperationWrapper) UnmarshalYAML(node *yaml.Node) error {
 		return fmt.Errorf("response operation type is missing")
 	}
 
-	var op ValidatableResponseOperation
+	var op IResponseOperation
 	switch ResponseOp.Type {
 	case addHeaderResponseOperationType:
 		op = &AddHeaderResponseOperation{}
@@ -70,4 +70,11 @@ func (op *AddHeaderResponseOperation) Validate() error {
 		return fmt.Errorf("value is missing")
 	}
 	return nil
+}
+
+func (op *AddHeaderResponseOperation) Resolve() proxy.ResponseOperation {
+	return &proxy.AddHeaderResponseOperation{
+		Header: op.Header,
+		Value:  op.Value,
+	}
 }

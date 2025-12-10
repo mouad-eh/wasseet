@@ -7,13 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type ValidatableRequestOperation interface {
-	proxy.RequestOperation
+type IRequestOperation interface {
 	Validate() error
+	Resolve() proxy.RequestOperation
 }
 
 type RequestOperationWrapper struct {
-	Operation ValidatableRequestOperation
+	Operation IRequestOperation
 }
 
 func (w *RequestOperationWrapper) UnmarshalYAML(node *yaml.Node) error {
@@ -26,7 +26,7 @@ func (w *RequestOperationWrapper) UnmarshalYAML(node *yaml.Node) error {
 		return fmt.Errorf("request operation type is missing")
 	}
 
-	var op ValidatableRequestOperation
+	var op IRequestOperation
 	switch RequestOp.Type {
 	case addHeaderRequestOperationType:
 		op = &AddHeaderRequestOperation{}
@@ -69,4 +69,11 @@ func (op *AddHeaderRequestOperation) Validate() error {
 		return fmt.Errorf("value is missing")
 	}
 	return nil
+}
+
+func (op *AddHeaderRequestOperation) Resolve() proxy.RequestOperation {
+	return &proxy.AddHeaderRequestOperation{
+		Header: op.Header,
+		Value:  op.Value,
+	}
 }
