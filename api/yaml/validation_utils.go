@@ -6,7 +6,10 @@ import (
 	"regexp"
 )
 
-func isValidPort(port int) bool {
+func isValidPort(port int, allowZero bool) bool {
+	if allowZero {
+		return port >= 0 && port <= 65535
+	}
 	return port >= 1 && port <= 65535
 }
 
@@ -26,7 +29,7 @@ func isValidDNSOrIPWithPort(addr string) bool {
 		// Validate port is a valid number
 		portNum := 0
 		_, err = fmt.Sscanf(port, "%d", &portNum)
-		return err == nil && isValidPort(portNum)
+		return err == nil && isValidPort(portNum, false)
 	}
 	// No port: must be hostname only
 	return dnsRegex.MatchString(addr)

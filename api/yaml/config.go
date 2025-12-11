@@ -48,7 +48,11 @@ func (c *Config) Resolve() config.Config {
 		// Parse server URLs
 		servers := make([]*url.URL, len(bg.Servers))
 		for i, server := range bg.Servers {
-			u, _ := url.Parse("http://" + server)
+			serverURL := server
+			if !strings.HasPrefix(server, "http://") {
+				serverURL = "http://" + server
+			}
+			u, _ := url.Parse(serverURL)
 			servers[i] = u
 		}
 
@@ -109,9 +113,12 @@ func (c *Config) Resolve() config.Config {
 }
 
 func (c *Config) Validate() error {
-	// Validate port
-	if !isValidPort(c.Port) {
-		return fmt.Errorf("port must be between 1 and 65535")
+	// We consider port 0 as a valid port as it will let the OS choose
+	// any available port which can be useful for testing.
+	// TODO: Port 0 on prod is not allowed. We should consider adding
+	// environment flag (test/prod).
+	if !isValidPort(c.Port, true) {
+		return fmt.Errorf("port must be between 0 and 65535")
 	}
 	if len(c.BackendGroups) == 0 {
 		return fmt.Errorf("at least one backend group must be defined")
@@ -158,7 +165,8 @@ func (bg BackendGroup) Validate() error {
 	}
 	// Validate servers
 	for j, server := range bg.Servers {
-		if !isValidDNSOrIPWithPort(server) {
+		serverToValidate := strings.TrimPrefix(server, "http://")
+		if !isValidDNSOrIPWithPort(serverToValidate) {
 			return fmt.Errorf("server %d %q must be in format [hostname|IP:port]", j, server)
 		}
 	}

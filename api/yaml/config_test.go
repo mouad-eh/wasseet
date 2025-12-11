@@ -14,12 +14,12 @@ import (
 
 func TestValidate_ValidConfig(t *testing.T) {
 	yamlContent := `
-port: 8080
+port: 0
 backend_groups:
   - name: backend1
     load_balancing: round_robin
     servers:
-      - localhost:9000
+      - http://localhost:9000
       - localhost:9001
 rules:
   - path: /api
@@ -64,12 +64,12 @@ rules:
 
 func TestResolve(t *testing.T) {
 	yamlContent := `
-port: 8080
+port: 0
 backend_groups:
   - name: backend1
     load_balancing: round_robin
     servers:
-      - localhost:9000
+      - http://localhost:9000
       - localhost:9001
 rules:
   - path: /
@@ -126,7 +126,7 @@ rules:
 	}
 
 	expected := config.Config{
-		Port:          8080,
+		Port:          0,
 		BackendGroups: []*config.BackendGroup{backendGroup},
 		Rules:         []*config.Rule{rule},
 	}
