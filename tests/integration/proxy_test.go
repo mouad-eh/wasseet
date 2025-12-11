@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,25 +52,10 @@ func TestRoundRobinLoadBalancing(t *testing.T) {
 		},
 	}
 
-	// start the proxy in a separate goroutine
+	// start the proxy
 	proxyServer := proxy.NewProxy(proxyConfig, &proxy.HttpClient{Client: &http.Client{}})
-	go func() {
-		if err := proxyServer.Start(); err != nil && err != http.ErrServerClosed {
-			t.Logf("Proxy server error: %v", err)
-		}
-	}()
+	proxyURL := startProxyAndGetURL(t, proxyServer)
 	defer proxyServer.Stop()
-
-	// wait for proxy to get its address
-	var proxyURL string
-	for i := 0; i < 50; i++ {
-		if addr := proxyServer.GetAddr(); addr != "" {
-			proxyURL = fmt.Sprintf("http://%s", addr)
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	require.NotEmpty(t, proxyURL, "proxy failed to start")
 
 	// send requests to proxy and check if they are load balanced
 	numRequests := 8
@@ -124,25 +112,10 @@ func TestRoutingToMultipleBackendGroups(t *testing.T) {
 		Rules:         rules,
 	}
 
-	// start the proxy in a separate goroutine
+	// start the proxy
 	proxyServer := proxy.NewProxy(proxyConfig, &proxy.HttpClient{Client: &http.Client{}})
-	go func() {
-		if err := proxyServer.Start(); err != nil && err != http.ErrServerClosed {
-			t.Logf("Proxy server error: %v", err)
-		}
-	}()
+	proxyURL := startProxyAndGetURL(t, proxyServer)
 	defer proxyServer.Stop()
-
-	// wait for proxy to get its address
-	var proxyURL string
-	for i := 0; i < 50; i++ {
-		if addr := proxyServer.GetAddr(); addr != "" {
-			proxyURL = fmt.Sprintf("http://%s", addr)
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	require.NotEmpty(t, proxyURL, "proxy failed to start")
 
 	// test all valid routes + an invalid route
 	for i := 0; i <= numBackendGroups; i++ {
@@ -199,25 +172,10 @@ func TestAddHeaderRequestOperation(t *testing.T) {
 		},
 	}
 
-	// start the proxy in a separate goroutine
+	// start the proxy
 	proxyServer := proxy.NewProxy(proxyConfig, &proxy.HttpClient{Client: &http.Client{}})
-	go func() {
-		if err := proxyServer.Start(); err != nil && err != http.ErrServerClosed {
-			t.Logf("Proxy server error: %v", err)
-		}
-	}()
+	proxyURL := startProxyAndGetURL(t, proxyServer)
 	defer proxyServer.Stop()
-
-	// wait for proxy to get its address
-	var proxyURL string
-	for i := 0; i < 50; i++ {
-		if addr := proxyServer.GetAddr(); addr != "" {
-			proxyURL = fmt.Sprintf("http://%s", addr)
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	require.NotEmpty(t, proxyURL, "proxy failed to start")
 
 	// send request to proxy and verify the custom header was added
 	resp, err := http.Get(proxyURL + "/")
@@ -267,16 +225,71 @@ func TestAddHeaderResponseOperation(t *testing.T) {
 		},
 	}
 
-	// start the proxy in a separate goroutine
+	// start the proxy
 	proxyServer := proxy.NewProxy(proxyConfig, &proxy.HttpClient{Client: &http.Client{}})
+	proxyURL := startProxyAndGetURL(t, proxyServer)
+	defer proxyServer.Stop()
+
+	// send request to proxy and verify the response header was added
+	resp, err := http.Get(proxyURL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, testHeaderValue, resp.Header.Get(testHeader))
+}
+
+func TestYamlConfigLoading(t *testing.T) {
+	bodyContent := "Hello World!"
+	// start a backend server
+	backendServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(bodyContent))
+	}))
+	backendURL, _ := url.Parse(backendServer.URL)
+	defer backendServer.Close()
+
+	// load template and create temp config file
+	templatePath := filepath.Join("testdata", "single_backend_config.yaml")
+	template, err := os.ReadFile(templatePath)
+	require.NoError(t, err)
+
+	// replace placeholder with actual backend URL
+	configContent := strings.ReplaceAll(string(template), "{{BACKEND_URL}}", backendURL.String())
+
+	// write to temporary file
+	tempConfigFile, err := os.CreateTemp("", "proxy_config_*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tempConfigFile.Name())
+
+	_, err = tempConfigFile.WriteString(configContent)
+	require.NoError(t, err)
+	tempConfigFile.Close()
+
+	// load proxy from config file
+	proxy, err := proxy.NewProxyFromConfigFile(tempConfigFile.Name(), &proxy.HttpClient{Client: &http.Client{}})
+	require.NoError(t, err)
+
+	proxyURL := startProxyAndGetURL(t, proxy)
+	defer proxy.Stop()
+
+	// send request to proxy and verify the response body
+	resp, err := http.Get(proxyURL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, bodyContent, string(body))
+}
+
+// startProxyAndGetURL starts the proxy in a separate goroutine and waits for its address to be available
+func startProxyAndGetURL(t *testing.T, proxyServer *proxy.Proxy) string {
 	go func() {
 		if err := proxyServer.Start(); err != nil && err != http.ErrServerClosed {
 			t.Logf("Proxy server error: %v", err)
 		}
 	}()
-	defer proxyServer.Stop()
 
-	// wait for proxy to get its address
 	var proxyURL string
 	for i := 0; i < 50; i++ {
 		if addr := proxyServer.GetAddr(); addr != "" {
@@ -286,12 +299,5 @@ func TestAddHeaderResponseOperation(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	require.NotEmpty(t, proxyURL, "proxy failed to start")
-
-	// send request to proxy and verify the response header was added
-	resp, err := http.Get(proxyURL + "/")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Equal(t, testHeaderValue, resp.Header.Get(testHeader))
+	return proxyURL
 }

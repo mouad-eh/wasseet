@@ -6,11 +6,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	yamlapi "github.com/mouad-eh/wasseet/api/yaml"
 	"github.com/mouad-eh/wasseet/proxy/config"
 	"github.com/mouad-eh/wasseet/proxy/request"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/yaml.v3"
 )
 
 type Proxy struct {
@@ -19,6 +22,27 @@ type Proxy struct {
 	server   *http.Server
 	client   BackendClient
 	logger   *zap.SugaredLogger
+}
+
+func NewProxyFromConfigFile(configFilePath string, bc BackendClient) (*Proxy, error) {
+	configBytes, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var yamlConfig yamlapi.Config
+	if err := yaml.Unmarshal(configBytes, &yamlConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config file: %w", err)
+	}
+
+	err = yamlConfig.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate config file: %w", err)
+	}
+
+	config := yamlConfig.Resolve()
+
+	return NewProxy(&config, bc), nil
 }
 
 func NewProxy(config *config.Config, bc BackendClient) *Proxy {
