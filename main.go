@@ -8,6 +8,7 @@ import (
 
 	"github.com/mouad-eh/wasseet/loadbalancer"
 	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
 )
 
 func main() {
@@ -22,9 +23,9 @@ func main() {
 		{Scheme: "http", Host: fmt.Sprintf("localhost:%d", backend2Port)},
 	}
 
-	proxyConfig := &proxy.Config{
+	proxyConfig := &config.Config{
 		Port: 8080,
-		BackendGroups: []*proxy.BackendGroup{
+		BackendGroups: []*config.BackendGroup{
 			{
 				Lb:      loadbalancer.NewRoundRobin(backendUrls),
 				Servers: backendUrls,

@@ -9,17 +9,19 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/proxy/request"
 )
 
 type Proxy struct {
-	config   *Config
+	config   *config.Config
 	listener net.Listener
 	server   *http.Server
 	client   BackendClient
 	logger   *zap.SugaredLogger
 }
 
-func NewProxy(config *Config, bc BackendClient) *Proxy {
+func NewProxy(config *config.Config, bc BackendClient) *Proxy {
 	loggerConfig := zap.Config{
 		Level:       zap.NewAtomicLevelAt(zap.DebugLevel),
 		Development: true,
@@ -74,7 +76,7 @@ func (p *Proxy) Stop() error {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	serverReq := ServerRequest{r}
+	serverReq := request.ServerRequest{r}
 
 	rule, err := p.config.GetFirstMatchingRule(serverReq)
 	if err != nil {

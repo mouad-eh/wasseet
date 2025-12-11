@@ -1,12 +1,13 @@
-package yaml
+package yaml_test
 
 import (
 	"net/url"
 	"reflect"
 	"testing"
 
+	yamlapi "github.com/mouad-eh/wasseet/api/yaml"
 	"github.com/mouad-eh/wasseet/loadbalancer"
-	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -33,7 +34,7 @@ rules:
         value: proxy
 `
 
-	var config Config
+	var config yamlapi.Config
 	err := yaml.Unmarshal([]byte(yamlContent), &config)
 	require.NoError(t, err)
 
@@ -53,7 +54,7 @@ rules:
     backend_group: nonexistent_group
 `
 
-	var config Config
+	var config yamlapi.Config
 	err := yaml.Unmarshal([]byte(yamlContent), &config)
 	require.NoError(t, err)
 
@@ -83,12 +84,12 @@ rules:
         value: proxy
 `
 
-	var config Config
-	err := yaml.Unmarshal([]byte(yamlContent), &config)
+	var yamlconfig yamlapi.Config
+	err := yaml.Unmarshal([]byte(yamlContent), &yamlconfig)
 	require.NoError(t, err)
 
 	// Resolve the config
-	resolved := config.Resolve()
+	resolved := yamlconfig.Resolve()
 
 	// Build the expected proxy.Config manually
 	servers := []*url.URL{
@@ -96,27 +97,27 @@ rules:
 		{Scheme: "http", Host: "localhost:9001"},
 	}
 
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Name:    "backend1",
 		Lb:      loadbalancer.NewRoundRobin(servers),
 		Servers: servers,
 	}
 
-	requestOps := []proxy.RequestOperation{
-		&proxy.AddHeaderRequestOperation{
+	requestOps := []config.RequestOperation{
+		&config.AddHeaderRequestOperation{
 			Header: "X-Forwarded-For",
 			Value:  "127.0.0.1",
 		},
 	}
 
-	responseOps := []proxy.ResponseOperation{
-		&proxy.AddHeaderResponseOperation{
+	responseOps := []config.ResponseOperation{
+		&config.AddHeaderResponseOperation{
 			Header: "X-Response-From",
 			Value:  "proxy",
 		},
 	}
 
-	rule := &proxy.Rule{
+	rule := &config.Rule{
 		Host:               "",
 		Path:               "",
 		BackendGroup:       backendGroup,
@@ -124,10 +125,10 @@ rules:
 		ResponseOperations: responseOps,
 	}
 
-	expected := proxy.Config{
+	expected := config.Config{
 		Port:          8080,
-		BackendGroups: []*proxy.BackendGroup{backendGroup},
-		Rules:         []*proxy.Rule{rule},
+		BackendGroups: []*config.BackendGroup{backendGroup},
+		Rules:         []*config.Rule{rule},
 	}
 
 	require.True(t, reflect.DeepEqual(resolved, expected))

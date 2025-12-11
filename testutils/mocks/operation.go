@@ -4,49 +4,50 @@
 package mocks
 
 import (
-	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/proxy/request"
 	"net/http"
 	"sync"
 )
 
-// Ensure, that RequestOperationMock does implement proxy.RequestOperation.
+// Ensure, that RequestOperationMock does implement config.RequestOperation.
 // If this is not the case, regenerate this file with moq.
-var _ proxy.RequestOperation = &RequestOperationMock{}
+var _ config.RequestOperation = &RequestOperationMock{}
 
-// RequestOperationMock is a mock implementation of proxy.RequestOperation.
+// RequestOperationMock is a mock implementation of config.RequestOperation.
 //
 //	func TestSomethingThatUsesRequestOperation(t *testing.T) {
 //
-//		// make and configure a mocked proxy.RequestOperation
+//		// make and configure a mocked config.RequestOperation
 //		mockedRequestOperation := &RequestOperationMock{
-//			ApplyFunc: func(req proxy.ServerRequest)  {
+//			ApplyFunc: func(req request.ServerRequest)  {
 //				panic("mock out the Apply method")
 //			},
 //		}
 //
-//		// use mockedRequestOperation in code that requires proxy.RequestOperation
+//		// use mockedRequestOperation in code that requires config.RequestOperation
 //		// and then make assertions.
 //
 //	}
 type RequestOperationMock struct {
 	// ApplyFunc mocks the Apply method.
-	ApplyFunc func(req proxy.ServerRequest)
+	ApplyFunc func(req request.ServerRequest)
 
 	// calls tracks calls to the methods.
 	calls struct {
 		// Apply holds details about calls to the Apply method.
 		Apply []struct {
 			// Req is the req argument value.
-			Req proxy.ServerRequest
+			Req request.ServerRequest
 		}
 	}
 	lockApply sync.RWMutex
 }
 
 // Apply calls ApplyFunc.
-func (mock *RequestOperationMock) Apply(req proxy.ServerRequest) {
+func (mock *RequestOperationMock) Apply(req request.ServerRequest) {
 	callInfo := struct {
-		Req proxy.ServerRequest
+		Req request.ServerRequest
 	}{
 		Req: req,
 	}
@@ -64,10 +65,10 @@ func (mock *RequestOperationMock) Apply(req proxy.ServerRequest) {
 //
 //	len(mockedRequestOperation.ApplyCalls())
 func (mock *RequestOperationMock) ApplyCalls() []struct {
-	Req proxy.ServerRequest
+	Req request.ServerRequest
 } {
 	var calls []struct {
-		Req proxy.ServerRequest
+		Req request.ServerRequest
 	}
 	mock.lockApply.RLock()
 	calls = mock.calls.Apply
@@ -75,22 +76,22 @@ func (mock *RequestOperationMock) ApplyCalls() []struct {
 	return calls
 }
 
-// Ensure, that ResponseOperationMock does implement proxy.ResponseOperation.
+// Ensure, that ResponseOperationMock does implement config.ResponseOperation.
 // If this is not the case, regenerate this file with moq.
-var _ proxy.ResponseOperation = &ResponseOperationMock{}
+var _ config.ResponseOperation = &ResponseOperationMock{}
 
-// ResponseOperationMock is a mock implementation of proxy.ResponseOperation.
+// ResponseOperationMock is a mock implementation of config.ResponseOperation.
 //
 //	func TestSomethingThatUsesResponseOperation(t *testing.T) {
 //
-//		// make and configure a mocked proxy.ResponseOperation
+//		// make and configure a mocked config.ResponseOperation
 //		mockedResponseOperation := &ResponseOperationMock{
 //			ApplyFunc: func(resp *http.Response)  {
 //				panic("mock out the Apply method")
 //			},
 //		}
 //
-//		// use mockedResponseOperation in code that requires proxy.ResponseOperation
+//		// use mockedResponseOperation in code that requires config.ResponseOperation
 //		// and then make assertions.
 //
 //	}

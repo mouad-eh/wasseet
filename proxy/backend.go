@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"net/http"
+
+	"github.com/mouad-eh/wasseet/proxy/request"
 )
 
 //go:generate moq -pkg mocks -out ../testutils/mocks/backend_client.go .  BackendClient
@@ -11,7 +13,7 @@ import (
 // The Proxy relies on it instead of relying directly on an http.Client
 // in order to allow the usage of a mock implementation for testing.
 type BackendClient interface {
-	Do(ClientRequest) (*http.Response, error)
+	Do(request.ClientRequest) (*http.Response, error)
 }
 
 // HttpClient is an implementation of the BackendClient interface.
@@ -21,6 +23,6 @@ type HttpClient struct {
 	Client *http.Client
 }
 
-func (h *HttpClient) Do(req ClientRequest) (*http.Response, error) {
+func (h *HttpClient) Do(req request.ClientRequest) (*http.Response, error) {
 	return h.Client.Do(req.Request)
 }

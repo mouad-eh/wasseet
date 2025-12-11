@@ -11,6 +11,7 @@ import (
 
 	"github.com/mouad-eh/wasseet/loadbalancer"
 	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,17 +31,17 @@ func TestRoundRobinLoadBalancing(t *testing.T) {
 	}
 
 	// create a proxy config including the started backend servers
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Lb:      loadbalancer.NewRoundRobin(backendURLs),
 		Servers: backendURLs,
 	}
 
-	proxyConfig := &proxy.Config{
+	proxyConfig := &config.Config{
 		Port: 0, // let OS assign an available port
-		BackendGroups: []*proxy.BackendGroup{
+		BackendGroups: []*config.BackendGroup{
 			backendGroup,
 		},
-		Rules: []*proxy.Rule{
+		Rules: []*config.Rule{
 			{
 				Path:         "",
 				BackendGroup: backendGroup,
@@ -99,25 +100,25 @@ func TestRoutingToMultipleBackendGroups(t *testing.T) {
 	}
 
 	// create backend groups where each group has one backend server
-	backendGroups := make([]*proxy.BackendGroup, numBackendGroups)
+	backendGroups := make([]*config.BackendGroup, numBackendGroups)
 	for i := 0; i < numBackendGroups; i++ {
-		backendGroups[i] = &proxy.BackendGroup{
+		backendGroups[i] = &config.BackendGroup{
 			Lb:      loadbalancer.NewRoundRobin([]*url.URL{backendURLs[i]}),
 			Servers: []*url.URL{backendURLs[i]},
 		}
 	}
 
 	// create routing rules for each backend group
-	rules := make([]*proxy.Rule, numBackendGroups)
+	rules := make([]*config.Rule, numBackendGroups)
 	for i := 0; i < numBackendGroups; i++ {
-		rules[i] = &proxy.Rule{
+		rules[i] = &config.Rule{
 			Path:         fmt.Sprintf("/api%d", i),
 			BackendGroup: backendGroups[i],
 		}
 	}
 
 	// create proxy config with routing rules for different paths
-	proxyConfig := &proxy.Config{
+	proxyConfig := &config.Config{
 		Port:          0,
 		BackendGroups: backendGroups,
 		Rules:         rules,
@@ -175,21 +176,21 @@ func TestAddHeaderRequestOperation(t *testing.T) {
 	defer backendServer.Close()
 
 	// create proxy config with a AddHeaderRequest operation
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Lb:      loadbalancer.NewRoundRobin([]*url.URL{backendURL}),
 		Servers: []*url.URL{backendURL},
 	}
-	proxyConfig := &proxy.Config{
+	proxyConfig := &config.Config{
 		Port: 0,
-		BackendGroups: []*proxy.BackendGroup{
+		BackendGroups: []*config.BackendGroup{
 			backendGroup,
 		},
-		Rules: []*proxy.Rule{
+		Rules: []*config.Rule{
 			{
 				Path:         "",
 				BackendGroup: backendGroup,
-				RequestOperations: []proxy.RequestOperation{
-					&proxy.AddHeaderRequestOperation{
+				RequestOperations: []config.RequestOperation{
+					&config.AddHeaderRequestOperation{
 						Header: testHeader,
 						Value:  testHeaderValue,
 					},
@@ -239,7 +240,7 @@ func TestAddHeaderResponseOperation(t *testing.T) {
 	defer backendServer.Close()
 
 	// create a backend group with one backend server
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Lb:      loadbalancer.NewRoundRobin([]*url.URL{backendURL}),
 		Servers: []*url.URL{backendURL},
 	}
@@ -247,17 +248,17 @@ func TestAddHeaderResponseOperation(t *testing.T) {
 	// create a rule with an AddHeaderResponseOperation
 	testHeader := "X-Response-Header"
 	testHeaderValue := "response-header-value"
-	proxyConfig := &proxy.Config{
+	proxyConfig := &config.Config{
 		Port: 0,
-		BackendGroups: []*proxy.BackendGroup{
+		BackendGroups: []*config.BackendGroup{
 			backendGroup,
 		},
-		Rules: []*proxy.Rule{
+		Rules: []*config.Rule{
 			{
 				Path:         "",
 				BackendGroup: backendGroup,
-				ResponseOperations: []proxy.ResponseOperation{
-					&proxy.AddHeaderResponseOperation{
+				ResponseOperations: []config.ResponseOperation{
+					&config.AddHeaderResponseOperation{
 						Header: testHeader,
 						Value:  testHeaderValue,
 					},

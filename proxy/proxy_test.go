@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/proxy/request"
 	"github.com/mouad-eh/wasseet/testutils/mocks"
 	"github.com/stretchr/testify/require"
 )
@@ -15,14 +17,14 @@ import (
 func TestNoRuleMatchesRequest(t *testing.T) {
 	backend := &url.URL{Scheme: "http", Host: "backend.io"}
 
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Lb:      &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }},
 		Servers: []*url.URL{backend},
 	}
 
-	config := &proxy.Config{
-		BackendGroups: []*proxy.BackendGroup{backendGroup},
-		Rules: []*proxy.Rule{
+	config := &config.Config{
+		BackendGroups: []*config.BackendGroup{backendGroup},
+		Rules: []*config.Rule{
 			{
 				Path:         "/baz",
 				BackendGroup: backendGroup,
@@ -51,23 +53,23 @@ func TestRuleMatchesRequest(t *testing.T) {
 
 	loadBalancer := &mocks.LoadBalancerMock{NextFunc: func() *url.URL { return backend }}
 
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Lb:      loadBalancer,
 		Servers: []*url.URL{backend},
 	}
 
 	requestOperation := &mocks.RequestOperationMock{}
 	responseOperation := &mocks.ResponseOperationMock{}
-	config := &proxy.Config{
-		BackendGroups: []*proxy.BackendGroup{backendGroup},
-		Rules: []*proxy.Rule{
+	config := &config.Config{
+		BackendGroups: []*config.BackendGroup{backendGroup},
+		Rules: []*config.Rule{
 			{
 				Path:         "/foo",
 				BackendGroup: backendGroup,
-				RequestOperations: []proxy.RequestOperation{
+				RequestOperations: []config.RequestOperation{
 					requestOperation,
 				},
-				ResponseOperations: []proxy.ResponseOperation{
+				ResponseOperations: []config.ResponseOperation{
 					responseOperation,
 				},
 			},
@@ -114,7 +116,7 @@ func TestRuleMatchesRequest(t *testing.T) {
 
 func NewBackendClientMock(handler http.HandlerFunc) *mocks.BackendClientMock {
 	return &mocks.BackendClientMock{
-		DoFunc: func(clientRequest proxy.ClientRequest) (*http.Response, error) {
+		DoFunc: func(clientRequest request.ClientRequest) (*http.Response, error) {
 			w := httptest.NewRecorder()
 
 			serverReq := clientRequest.ToServerRequest()

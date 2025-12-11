@@ -3,13 +3,14 @@ package yaml
 import (
 	"fmt"
 
-	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/proxy/request"
 	"gopkg.in/yaml.v3"
 )
 
 type IRequestOperation interface {
 	Validate() error
-	Resolve() proxy.RequestOperation
+	Resolve() config.RequestOperation
 }
 
 type RequestOperationWrapper struct {
@@ -59,7 +60,7 @@ type AddHeaderRequestOperation struct {
 	Value  string `yaml:"value"`
 }
 
-func (op *AddHeaderRequestOperation) Apply(req proxy.ServerRequest) {}
+func (op *AddHeaderRequestOperation) Apply(req request.ServerRequest) {}
 
 func (op *AddHeaderRequestOperation) Validate() error {
 	if op.Header == "" {
@@ -71,8 +72,8 @@ func (op *AddHeaderRequestOperation) Validate() error {
 	return nil
 }
 
-func (op *AddHeaderRequestOperation) Resolve() proxy.RequestOperation {
-	return &proxy.AddHeaderRequestOperation{
+func (op *AddHeaderRequestOperation) Resolve() config.RequestOperation {
+	return &config.AddHeaderRequestOperation{
 		Header: op.Header,
 		Value:  op.Value,
 	}

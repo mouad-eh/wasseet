@@ -1,11 +1,12 @@
-package proxy_test
+package config_test
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/proxy/request"
 	"github.com/mouad-eh/wasseet/testutils/mocks"
 	"github.com/stretchr/testify/require"
 )
@@ -13,79 +14,79 @@ import (
 func TestRuleMatch(t *testing.T) {
 	tests := []struct {
 		name     string
-		rule     *proxy.Rule
-		request  proxy.ServerRequest
+		rule     *config.Rule
+		request  request.ServerRequest
 		expected bool
 	}{
 		{
 			name: "match by path when host is empty",
-			rule: &proxy.Rule{
+			rule: &config.Rule{
 				Host: "",
 				Path: "/api",
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://any.com/api", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expected: true,
 		},
 		{
 			name: "match by host when path is empty",
-			rule: &proxy.Rule{
+			rule: &config.Rule{
 				Host: "example.com",
 				Path: "",
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://example.com/any/path", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expected: true,
 		},
 		{
 			name: "partial match by host",
-			rule: &proxy.Rule{
+			rule: &config.Rule{
 				Host: "example.com",
 				Path: "/api",
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://example.com/other", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expected: false,
 		},
 		{
 			name: "partial match by path",
-			rule: &proxy.Rule{
+			rule: &config.Rule{
 				Host: "other.com",
 				Path: "/api/users",
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://different.com/api/users", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expected: false,
 		},
 		{
 			name: "match by both host and path",
-			rule: &proxy.Rule{
+			rule: &config.Rule{
 				Host: "example.com",
 				Path: "/api",
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://example.com/api", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expected: true,
 		},
 		{
 			name: "no match by both host and path",
-			rule: &proxy.Rule{
+			rule: &config.Rule{
 				Host: "example.com",
 				Path: "/api",
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://other.com/other", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expected: false,
 		},
@@ -102,17 +103,17 @@ func TestRuleMatch(t *testing.T) {
 func TestApplyRequestOperations(t *testing.T) {
 	tests := []struct {
 		name                   string
-		operations             []proxy.RequestOperation
+		operations             []config.RequestOperation
 		expectedApplyCallCount int
 	}{
 		{
 			name:                   "zero operations",
-			operations:             []proxy.RequestOperation{},
+			operations:             []config.RequestOperation{},
 			expectedApplyCallCount: 0,
 		},
 		{
 			name: "multiple operations",
-			operations: []proxy.RequestOperation{
+			operations: []config.RequestOperation{
 				&mocks.RequestOperationMock{},
 				&mocks.RequestOperationMock{},
 				&mocks.RequestOperationMock{},
@@ -124,9 +125,9 @@ func TestApplyRequestOperations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "http://example.com", nil)
-			serverReq := proxy.ServerRequest{req}
+			serverReq := request.ServerRequest{req}
 
-			rule := &proxy.Rule{
+			rule := &config.Rule{
 				RequestOperations: tt.operations,
 			}
 			rule.ApplyRequestOperations(serverReq)
@@ -147,17 +148,17 @@ func TestApplyRequestOperations(t *testing.T) {
 func TestApplyResponseOperations(t *testing.T) {
 	tests := []struct {
 		name              string
-		operations        []proxy.ResponseOperation
+		operations        []config.ResponseOperation
 		expectedCallCount int
 	}{
 		{
 			name:              "zero operations",
-			operations:        []proxy.ResponseOperation{},
+			operations:        []config.ResponseOperation{},
 			expectedCallCount: 0,
 		},
 		{
 			name: "multiple operations",
-			operations: []proxy.ResponseOperation{
+			operations: []config.ResponseOperation{
 				&mocks.ResponseOperationMock{},
 				&mocks.ResponseOperationMock{},
 				&mocks.ResponseOperationMock{},
@@ -172,7 +173,7 @@ func TestApplyResponseOperations(t *testing.T) {
 				Header: make(http.Header),
 			}
 
-			rule := &proxy.Rule{
+			rule := &config.Rule{
 				ResponseOperations: tt.operations,
 			}
 			rule.ApplyResponseOperations(resp)
@@ -191,21 +192,21 @@ func TestApplyResponseOperations(t *testing.T) {
 }
 
 func TestGetFirstMatchingRule(t *testing.T) {
-	backendGroup := &proxy.BackendGroup{
+	backendGroup := &config.BackendGroup{
 		Name: "backend-1",
 	}
 
 	tests := []struct {
 		name        string
-		config      *proxy.Config
-		request     proxy.ServerRequest
+		config      *config.Config
+		request     request.ServerRequest
 		expectError bool
-		expectRule  *proxy.Rule
+		expectRule  *config.Rule
 	}{
 		{
 			name: "returns first matching rule",
-			config: &proxy.Config{
-				Rules: []*proxy.Rule{
+			config: &config.Config{
+				Rules: []*config.Rule{
 					{
 						Host:         "example.com",
 						BackendGroup: backendGroup,
@@ -216,20 +217,20 @@ func TestGetFirstMatchingRule(t *testing.T) {
 					},
 				},
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://example.com", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expectError: false,
-			expectRule: &proxy.Rule{
+			expectRule: &config.Rule{
 				Host:         "example.com",
 				BackendGroup: backendGroup,
 			},
 		},
 		{
 			name: "returns correct rule when first doesn't match",
-			config: &proxy.Config{
-				Rules: []*proxy.Rule{
+			config: &config.Config{
+				Rules: []*config.Rule{
 					{
 						Host:         "first.com",
 						Path:         "/other",
@@ -242,12 +243,12 @@ func TestGetFirstMatchingRule(t *testing.T) {
 					},
 				},
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://second.com/api", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expectError: false,
-			expectRule: &proxy.Rule{
+			expectRule: &config.Rule{
 				Host:         "second.com",
 				Path:         "/api",
 				BackendGroup: backendGroup,
@@ -255,8 +256,8 @@ func TestGetFirstMatchingRule(t *testing.T) {
 		},
 		{
 			name: "returns error when no rule matches",
-			config: &proxy.Config{
-				Rules: []*proxy.Rule{
+			config: &config.Config{
+				Rules: []*config.Rule{
 					{
 						Host:         "example.com",
 						Path:         "/api/v1",
@@ -264,27 +265,27 @@ func TestGetFirstMatchingRule(t *testing.T) {
 					},
 				},
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://nomatch.com/other", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expectError: true,
 		},
 		{
 			name: "returns error when no rules defined",
-			config: &proxy.Config{
-				Rules: []*proxy.Rule{},
+			config: &config.Config{
+				Rules: []*config.Rule{},
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://example.com", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expectError: true,
 		},
 		{
 			name: "respects rule ordering",
-			config: &proxy.Config{
-				Rules: []*proxy.Rule{
+			config: &config.Config{
+				Rules: []*config.Rule{
 					{
 						Path:         "/api",
 						BackendGroup: backendGroup,
@@ -296,12 +297,12 @@ func TestGetFirstMatchingRule(t *testing.T) {
 					},
 				},
 			},
-			request: func() proxy.ServerRequest {
+			request: func() request.ServerRequest {
 				req := httptest.NewRequest("GET", "http://example.com/api", nil)
-				return proxy.ServerRequest{req}
+				return request.ServerRequest{req}
 			}(),
 			expectError: false,
-			expectRule: &proxy.Rule{
+			expectRule: &config.Rule{
 				Path:         "/api",
 				BackendGroup: backendGroup,
 			},

@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mouad-eh/wasseet/proxy"
 	"gopkg.in/yaml.v3"
+
+	"github.com/mouad-eh/wasseet/proxy/config"
 )
 
 type IResponseOperation interface {
 	Validate() error
-	Resolve() proxy.ResponseOperation
+	Resolve() config.ResponseOperation
 }
 
 type ResponseOperationWrapper struct {
@@ -72,8 +73,8 @@ func (op *AddHeaderResponseOperation) Validate() error {
 	return nil
 }
 
-func (op *AddHeaderResponseOperation) Resolve() proxy.ResponseOperation {
-	return &proxy.AddHeaderResponseOperation{
+func (op *AddHeaderResponseOperation) Resolve() config.ResponseOperation {
+	return &config.AddHeaderResponseOperation{
 		Header: op.Header,
 		Value:  op.Value,
 	}

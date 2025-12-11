@@ -5,6 +5,7 @@ package mocks
 
 import (
 	"github.com/mouad-eh/wasseet/proxy"
+	"github.com/mouad-eh/wasseet/proxy/request"
 	"net/http"
 	"sync"
 )
@@ -19,7 +20,7 @@ var _ proxy.BackendClient = &BackendClientMock{}
 //
 //		// make and configure a mocked proxy.BackendClient
 //		mockedBackendClient := &BackendClientMock{
-//			DoFunc: func(clientRequest proxy.ClientRequest) (*http.Response, error) {
+//			DoFunc: func(clientRequest request.ClientRequest) (*http.Response, error) {
 //				panic("mock out the Do method")
 //			},
 //		}
@@ -30,26 +31,26 @@ var _ proxy.BackendClient = &BackendClientMock{}
 //	}
 type BackendClientMock struct {
 	// DoFunc mocks the Do method.
-	DoFunc func(clientRequest proxy.ClientRequest) (*http.Response, error)
+	DoFunc func(clientRequest request.ClientRequest) (*http.Response, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
 		// Do holds details about calls to the Do method.
 		Do []struct {
 			// ClientRequest is the clientRequest argument value.
-			ClientRequest proxy.ClientRequest
+			ClientRequest request.ClientRequest
 		}
 	}
 	lockDo sync.RWMutex
 }
 
 // Do calls DoFunc.
-func (mock *BackendClientMock) Do(clientRequest proxy.ClientRequest) (*http.Response, error) {
+func (mock *BackendClientMock) Do(clientRequest request.ClientRequest) (*http.Response, error) {
 	if mock.DoFunc == nil {
 		panic("BackendClientMock.DoFunc: method is nil but BackendClient.Do was just called")
 	}
 	callInfo := struct {
-		ClientRequest proxy.ClientRequest
+		ClientRequest request.ClientRequest
 	}{
 		ClientRequest: clientRequest,
 	}
@@ -64,10 +65,10 @@ func (mock *BackendClientMock) Do(clientRequest proxy.ClientRequest) (*http.Resp
 //
 //	len(mockedBackendClient.DoCalls())
 func (mock *BackendClientMock) DoCalls() []struct {
-	ClientRequest proxy.ClientRequest
+	ClientRequest request.ClientRequest
 } {
 	var calls []struct {
-		ClientRequest proxy.ClientRequest
+		ClientRequest request.ClientRequest
 	}
 	mock.lockDo.RLock()
 	calls = mock.calls.Do

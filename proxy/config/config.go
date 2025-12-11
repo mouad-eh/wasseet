@@ -1,4 +1,4 @@
-package proxy
+package config
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"net/url"
 
 	"github.com/mouad-eh/wasseet/loadbalancer"
+	"github.com/mouad-eh/wasseet/proxy/request"
 )
 
 type Config struct {
@@ -20,7 +21,7 @@ type Config struct {
 // GetFirstMatchingRule returns an error if there are no rules.
 // We expect user to provide no rules if there is only one backend group, but
 // in this case we should always have default rule that matches all requests.
-func (c *Config) GetFirstMatchingRule(req ServerRequest) (*Rule, error) {
+func (c *Config) GetFirstMatchingRule(req request.ServerRequest) (*Rule, error) {
 	if len(c.Rules) == 0 {
 		return nil, fmt.Errorf("no rules provided, but there is more than one backend group")
 	}
@@ -46,7 +47,7 @@ type Rule struct {
 	ResponseOperations []ResponseOperation
 }
 
-func (r *Rule) Match(req ServerRequest) bool {
+func (r *Rule) Match(req request.ServerRequest) bool {
 	if r.Host != "" && r.Host != req.Host {
 		return false
 	}
@@ -56,7 +57,7 @@ func (r *Rule) Match(req ServerRequest) bool {
 	return true
 }
 
-func (r *Rule) ApplyRequestOperations(req ServerRequest) {
+func (r *Rule) ApplyRequestOperations(req request.ServerRequest) {
 	for _, op := range r.RequestOperations {
 		op.Apply(req)
 	}
@@ -68,10 +69,10 @@ func (r *Rule) ApplyResponseOperations(resp *http.Response) {
 	}
 }
 
-//go:generate moq -stub -pkg mocks -out ../testutils/mocks/operation.go .  RequestOperation ResponseOperation
+//go:generate moq -stub -pkg mocks -out ../../testutils/mocks/operation.go .  RequestOperation ResponseOperation
 
 type RequestOperation interface {
-	Apply(req ServerRequest)
+	Apply(req request.ServerRequest)
 }
 
 type ResponseOperation interface {
@@ -83,7 +84,7 @@ type AddHeaderRequestOperation struct {
 	Value  string
 }
 
-func (op *AddHeaderRequestOperation) Apply(req ServerRequest) {
+func (op *AddHeaderRequestOperation) Apply(req request.ServerRequest) {
 	req.Header.Add(op.Header, op.Value)
 }
 
