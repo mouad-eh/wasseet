@@ -17,11 +17,12 @@ import (
 )
 
 type Proxy struct {
-	config   *config.Config
-	listener net.Listener
-	server   *http.Server
-	client   BackendClient
-	logger   *zap.SugaredLogger
+	configManager *ConfigManager
+	listener      net.Listener
+	server        *http.Server
+	client        BackendClient
+	logger        *zap.SugaredLogger
+	shutdownCh    chan struct{}
 }
 
 func NewProxyFromConfigFile(configFilePath string, bc BackendClient) (*Proxy, error) {
@@ -42,7 +43,10 @@ func NewProxyFromConfigFile(configFilePath string, bc BackendClient) (*Proxy, er
 
 	config := yamlConfig.Resolve()
 
-	return NewProxy(&config, bc), nil
+	proxy := NewProxy(&config, bc)
+	proxy.configManager = NewConfigManager(&config, configFilePath, proxy.logger)
+
+	return proxy, nil
 }
 
 func NewProxy(config *config.Config, bc BackendClient) *Proxy {
@@ -63,20 +67,26 @@ func NewProxy(config *config.Config, bc BackendClient) *Proxy {
 	}
 
 	logger, _ := loggerConfig.Build()
+	sugaredLogger := logger.Sugar()
+	configManager := NewConfigManager(config, "", sugaredLogger)
 	return &Proxy{
-		server: &http.Server{},
-		client: bc,
-		config: config,
-		logger: logger.Sugar(),
+		server:        &http.Server{},
+		client:        bc,
+		configManager: configManager,
+		logger:        sugaredLogger,
+		shutdownCh:    make(chan struct{}),
 	}
 }
 
 func (p *Proxy) Start() error {
+	p.configManager.Start(p.shutdownCh)
+
+	// start http server
 	defaultServerMux := &http.ServeMux{}
 	defaultServerMux.Handle("/", p)
 	p.server.Handler = defaultServerMux
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", p.config.Port))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", p.configManager.GetLatestConfig().Port))
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
@@ -96,13 +106,16 @@ func (p *Proxy) GetAddr() string {
 }
 
 func (p *Proxy) Stop() error {
+	close(p.shutdownCh)
 	return p.server.Shutdown(context.Background())
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	serverReq := request.ServerRequest{r}
 
-	rule, err := p.config.GetFirstMatchingRule(serverReq)
+	latestConfig := p.configManager.GetLatestConfig()
+
+	rule, err := latestConfig.GetFirstMatchingRule(serverReq)
 	if err != nil {
 		p.logger.Errorw(err.Error(), "request_type", "server",
 			"request_method", r.Method, "request_path", r.URL.Path)

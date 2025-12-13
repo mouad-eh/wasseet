@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -248,22 +249,10 @@ func TestYamlConfigLoading(t *testing.T) {
 	backendURL, _ := url.Parse(backendServer.URL)
 	defer backendServer.Close()
 
-	// load template and create temp config file
-	templatePath := filepath.Join("testdata", "single_backend_config.yaml")
-	template, err := os.ReadFile(templatePath)
-	require.NoError(t, err)
-
-	// replace placeholder with actual backend URL
-	configContent := strings.ReplaceAll(string(template), "{{BACKEND_URL}}", backendURL.String())
-
-	// write to temporary file
-	tempConfigFile, err := os.CreateTemp("", "proxy_config_*.yaml")
-	require.NoError(t, err)
+	// fill in config template with backend url
+	templatePath := filepath.Join("testdata", t.Name(), "config.yaml")
+	tempConfigFile := createTempConfigFile(t, templatePath, backendURL)
 	defer os.Remove(tempConfigFile.Name())
-
-	_, err = tempConfigFile.WriteString(configContent)
-	require.NoError(t, err)
-	tempConfigFile.Close()
 
 	// load proxy from config file
 	proxy, err := proxy.NewProxyFromConfigFile(tempConfigFile.Name(), &proxy.HttpClient{Client: &http.Client{}})
@@ -280,6 +269,65 @@ func TestYamlConfigLoading(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, bodyContent, string(body))
+}
+
+func TestYamlConfigReloading(t *testing.T) {
+	// start a backend server
+	backendServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	backendURL, _ := url.Parse(backendServer.URL)
+	defer backendServer.Close()
+
+	// fill in v0 config template with backend url
+	templatePath_v0 := filepath.Join("testdata", t.Name(), "config_v0.yaml")
+	tempConfigFile_v0 := createTempConfigFile(t, templatePath_v0, backendURL)
+	defer os.Remove(tempConfigFile_v0.Name())
+
+	// fill in v1 config template with backend url
+	templatePath_v1 := filepath.Join("testdata", t.Name(), "config_v1.yaml")
+	tempConfigFile_v1 := createTempConfigFile(t, templatePath_v1, backendURL)
+
+	// load proxy from v0 config file
+	proxy, err := proxy.NewProxyFromConfigFile(tempConfigFile_v0.Name(), &proxy.HttpClient{Client: &http.Client{}})
+	require.NoError(t, err)
+
+	proxyURL := startProxyAndGetURL(t, proxy)
+	defer proxy.Stop()
+
+	// send requests to proxy using v0 config
+	resp_v0, err := http.Get(proxyURL + "/v0")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp_v0.StatusCode)
+	defer resp_v0.Body.Close()
+
+	resp_v1, err := http.Get(proxyURL + "/v1")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp_v1.StatusCode)
+	defer resp_v1.Body.Close()
+
+	// mv config_v1 to config_v0
+	os.Rename(tempConfigFile_v1.Name(), tempConfigFile_v0.Name())
+
+	// send SIGHUP signal to reload config
+	p, err := os.FindProcess(os.Getpid())
+	require.NoError(t, err)
+	err = p.Signal(syscall.SIGHUP)
+	require.NoError(t, err)
+
+	// wait for config to reload
+	time.Sleep(100 * time.Millisecond)
+
+	// send requests to proxy using v1 config
+	resp_v0, err = http.Get(proxyURL + "/v0")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp_v0.StatusCode)
+	defer resp_v0.Body.Close()
+
+	resp_v1, err = http.Get(proxyURL + "/v1")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp_v1.StatusCode)
+	defer resp_v1.Body.Close()
 }
 
 // startProxyAndGetURL starts the proxy in a separate goroutine and waits for its address to be available
@@ -300,4 +348,23 @@ func startProxyAndGetURL(t *testing.T, proxyServer *proxy.Proxy) string {
 	}
 	require.NotEmpty(t, proxyURL, "proxy failed to start")
 	return proxyURL
+}
+
+// createTempConfigFile creates a temporary config file from the given template and backend URL
+func createTempConfigFile(t *testing.T, templatePath string, backendURL *url.URL) *os.File {
+	template, err := os.ReadFile(templatePath)
+	require.NoError(t, err)
+
+	// replace placeholder with actual backend URL
+	configContent := strings.ReplaceAll(string(template), "{{BACKEND_URL}}", backendURL.String())
+
+	// write to temporary file
+	tempConfigFile, err := os.CreateTemp("", "proxy_config_*.yaml")
+	require.NoError(t, err)
+
+	_, err = tempConfigFile.WriteString(configContent)
+	require.NoError(t, err)
+	tempConfigFile.Close()
+
+	return tempConfigFile
 }

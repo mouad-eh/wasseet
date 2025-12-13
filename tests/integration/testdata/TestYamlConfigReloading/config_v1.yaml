@@ -1,0 +1,9 @@
+port: 0
+backend_groups:
+  - name: test
+    load_balancing: round_robin
+    servers:
+      - {{BACKEND_URL}}
+rules:
+  - path: /v1
+    backend_group: test
