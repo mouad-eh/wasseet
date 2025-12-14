@@ -240,6 +240,143 @@ func TestAddHeaderResponseOperation(t *testing.T) {
 	require.Equal(t, testHeaderValue, resp.Header.Get(testHeader))
 }
 
+func TestHealthChecks(t *testing.T) {
+	// start two backend servers
+	responseBodyServer1 := "backend1"
+	backendServer1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.Write([]byte(responseBodyServer1))
+	}))
+	backendURL1, _ := url.Parse(backendServer1.URL)
+	defer backendServer1.Close()
+
+	responseBodyServer2 := "backend2"
+	healthyHandlerServer2 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.Write([]byte(responseBodyServer2))
+	})
+	backendServer2 := httptest.NewServer(healthyHandlerServer2)
+	backendURL2, _ := url.Parse(backendServer2.URL)
+	defer backendServer2.Close()
+
+	backendURLs := []*url.URL{backendURL1, backendURL2}
+
+	backendGroup := &config.BackendGroup{
+		Name:    "test-group",
+		Lb:      loadbalancer.NewRoundRobin(backendURLs),
+		Servers: backendURLs,
+		HealthCheck: &config.HealthCheck{
+			Path:     "/health",
+			Interval: 20 * time.Millisecond,
+			Timeout:  5 * time.Millisecond,
+			Retries:  3,
+		},
+	}
+
+	proxyConfig := &config.Config{
+		Port: 0, // let OS assign an available port
+		BackendGroups: []*config.BackendGroup{
+			backendGroup,
+		},
+		Rules: []*config.Rule{
+			{
+				Path:         "",
+				BackendGroup: backendGroup,
+			},
+		},
+	}
+
+	// start the proxy
+	proxyServer := proxy.NewProxy(proxyConfig, &proxy.HttpClient{Client: &http.Client{}})
+	proxyURL := startProxyAndGetURL(t, proxyServer)
+	defer proxyServer.Stop()
+
+	// send requests to proxy when two servers are healthy
+	numRequests := 5
+	numOfRespFromServer1 := 0
+	numOfRespFromServer2 := 0
+	for i := 0; i < numRequests; i++ {
+		resp, err := http.Get(proxyURL + "/")
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		if string(body) == responseBodyServer1 {
+			numOfRespFromServer1++
+		} else if string(body) == responseBodyServer2 {
+			numOfRespFromServer2++
+		}
+	}
+	require.GreaterOrEqual(t, numOfRespFromServer1, 1)
+	require.GreaterOrEqual(t, numOfRespFromServer2, 1)
+
+	// simulate server 2 going down
+	unhealthyHandlerServer2 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	backendServer2.Config.Handler = unhealthyHandlerServer2
+
+	// wait for the proxy to detect that backend server 2 is down
+	time.Sleep(100 * time.Millisecond)
+
+	// send requests to proxy when only one server is healthy
+	numRequests = 5
+	numOfRespFromServer1 = 0
+	numOfRespFromServer2 = 0
+	for i := 0; i < numRequests; i++ {
+		resp, err := http.Get(proxyURL + "/")
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		if string(body) == responseBodyServer1 {
+			numOfRespFromServer1++
+		} else if string(body) == responseBodyServer2 {
+			numOfRespFromServer2++
+		}
+	}
+	require.Equal(t, numOfRespFromServer1, numRequests)
+	require.Equal(t, numOfRespFromServer2, 0)
+
+	// bring back server 2 to life
+	backendServer2.Config.Handler = healthyHandlerServer2
+	time.Sleep(100 * time.Millisecond)
+
+	// send requests to proxy after server 2 is back up
+	numRequests = 5
+	numOfRespFromServer1 = 0
+	numOfRespFromServer2 = 0
+	for i := 0; i < numRequests; i++ {
+		resp, err := http.Get(proxyURL + "/")
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		if string(body) == responseBodyServer1 {
+			numOfRespFromServer1++
+		} else if string(body) == responseBodyServer2 {
+			numOfRespFromServer2++
+		}
+	}
+	require.GreaterOrEqual(t, numOfRespFromServer1, 1)
+	require.GreaterOrEqual(t, numOfRespFromServer2, 1)
+}
+
 func TestYamlConfigLoading(t *testing.T) {
 	bodyContent := "Hello World!"
 	// start a backend server

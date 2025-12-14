@@ -18,6 +18,7 @@ import (
 
 type Proxy struct {
 	configManager *ConfigManager
+	healthChecker *HealthChecker
 	listener      net.Listener
 	server        *http.Server
 	client        BackendClient
@@ -68,11 +69,13 @@ func NewProxy(config *config.Config, bc BackendClient) *Proxy {
 
 	logger, _ := loggerConfig.Build()
 	sugaredLogger := logger.Sugar()
+	healthChecker := NewHealthChecker(config.BackendGroups, bc, sugaredLogger)
 	configManager := NewConfigManager(config, "", sugaredLogger)
 	return &Proxy{
 		server:        &http.Server{},
 		client:        bc,
 		configManager: configManager,
+		healthChecker: healthChecker,
 		logger:        sugaredLogger,
 		shutdownCh:    make(chan struct{}),
 	}
@@ -80,7 +83,7 @@ func NewProxy(config *config.Config, bc BackendClient) *Proxy {
 
 func (p *Proxy) Start() error {
 	p.configManager.Start(p.shutdownCh)
-
+	p.healthChecker.Start(p.shutdownCh)
 	// start http server
 	defaultServerMux := &http.ServeMux{}
 	defaultServerMux.Handle("/", p)
@@ -126,6 +129,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rule.ApplyRequestOperations(serverReq)
 
 	targetBackend := rule.BackendGroup.Lb.Next()
+	// here we assume that at least one backend is healthy
+	// TODO: handle case when all backends are unhealthy
+	for !p.healthChecker.getHealthStatus(rule.BackendGroup.Name, targetBackend.String()) {
+		targetBackend = rule.BackendGroup.Lb.Next()
+	}
 
 	clientReq := serverReq.ToClientRequest(targetBackend)
 	resp, err := p.client.Do(clientReq)
