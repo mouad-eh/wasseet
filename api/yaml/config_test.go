@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	yamlapi "github.com/mouad-eh/wasseet/api/yaml"
 	"github.com/mouad-eh/wasseet/loadbalancer"
@@ -21,6 +22,11 @@ backend_groups:
     servers:
       - http://localhost:9000
       - localhost:9001
+    health_check:
+      path: /health
+      interval: 10s
+      timeout: 5s
+      retries: 3
 rules:
   - path: /api
     backend_group: backend1
@@ -71,6 +77,11 @@ backend_groups:
     servers:
       - http://localhost:9000
       - localhost:9001
+    health_check:
+      path: /health
+      interval: 10s
+      timeout: 5s
+      retries: 3
 rules:
   - path: /
     backend_group: backend1
@@ -101,6 +112,12 @@ rules:
 		Name:    "backend1",
 		Lb:      loadbalancer.NewRoundRobin(servers),
 		Servers: servers,
+		HealthCheck: &config.HealthCheck{
+			Path:     "/health",
+			Interval: 10 * time.Second,
+			Timeout:  5 * time.Second,
+			Retries:  3,
+		},
 	}
 
 	requestOps := []config.RequestOperation{

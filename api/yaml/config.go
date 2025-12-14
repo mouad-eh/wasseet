@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/mouad-eh/wasseet/loadbalancer"
 	"github.com/mouad-eh/wasseet/proxy/config"
@@ -19,6 +20,14 @@ type BackendGroup struct {
 	Name          string            `yaml:"name"`
 	LoadBalancing LoadBalancingType `yaml:"load_balancing"` // Optional
 	Servers       []string          `yaml:"servers"`
+	HealthCheck   *HealthCheck      `yaml:"health_check"` // Optional
+}
+
+type HealthCheck struct {
+	Path     string `yaml:"path"`
+	Interval string `yaml:"interval"`
+	Timeout  string `yaml:"timeout"`
+	Retries  int    `yaml:"retries"`
 }
 
 type LoadBalancingType string
@@ -63,10 +72,27 @@ func (c *Config) Resolve() config.Config {
 			lb = loadbalancer.NewRoundRobin(servers)
 		}
 
+		// Resolve health check
+		var healthCheck *config.HealthCheck
+		if bg.HealthCheck != nil {
+			// we are sure that ParseDuration will not fail because
+			// we already checked that during validation.
+			interval, _ := time.ParseDuration(bg.HealthCheck.Interval)
+			timeout, _ := time.ParseDuration(bg.HealthCheck.Timeout)
+
+			healthCheck = &config.HealthCheck{
+				Path:     bg.HealthCheck.Path,
+				Interval: interval,
+				Timeout:  timeout,
+				Retries:  bg.HealthCheck.Retries,
+			}
+		}
+
 		proxyBG := &config.BackendGroup{
-			Name:    bg.Name,
-			Lb:      lb,
-			Servers: servers,
+			Name:        bg.Name,
+			Lb:          lb,
+			Servers:     servers,
+			HealthCheck: healthCheck,
 		}
 		proxyBGMap[bg.Name] = proxyBG
 	}
@@ -173,6 +199,38 @@ func (bg BackendGroup) Validate() error {
 	// Validate load balancing type
 	if !isValidLoadBalancingType(bg.LoadBalancing) {
 		return fmt.Errorf("invalid load balancing type %q", bg.LoadBalancing)
+	}
+
+	if bg.HealthCheck != nil {
+		if err := bg.HealthCheck.Validate(); err != nil {
+			return fmt.Errorf("health check: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (hc HealthCheck) Validate() error {
+	if !strings.HasPrefix(hc.Path, "/") {
+		return fmt.Errorf("path %q must start with /", hc.Path)
+	}
+
+	interval, err := time.ParseDuration(hc.Interval)
+	if err != nil {
+		return fmt.Errorf("invalid interval %q: %w", hc.Interval, err)
+	}
+	if interval <= 0 {
+		return fmt.Errorf("invalid interval %q: must be greater than 0", hc.Interval)
+	}
+	timeout, err := time.ParseDuration(hc.Timeout)
+	if err != nil {
+		return fmt.Errorf("invalid timeout %q: %w", hc.Timeout, err)
+	}
+	if timeout <= 0 {
+		return fmt.Errorf("invalid timeout %q: must be greater than 0", hc.Timeout)
+	}
+	if timeout >= interval {
+		return fmt.Errorf("invalid timeout %q: must be less than interval %q", hc.Timeout, hc.Interval)
 	}
 
 	return nil

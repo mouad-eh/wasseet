@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/mouad-eh/wasseet/loadbalancer"
 	"github.com/mouad-eh/wasseet/proxy/request"
@@ -34,9 +35,17 @@ func (c *Config) GetFirstMatchingRule(req request.ServerRequest) (*Rule, error) 
 }
 
 type BackendGroup struct {
-	Name    string
-	Lb      loadbalancer.LoadBalancer
-	Servers []*url.URL
+	Name        string
+	Lb          loadbalancer.LoadBalancer
+	Servers     []*url.URL
+	HealthCheck *HealthCheck
+}
+
+type HealthCheck struct {
+	Path     string
+	Interval time.Duration
+	Timeout  time.Duration
+	Retries  int
 }
 
 type Rule struct {
