@@ -3,7 +3,7 @@ package proxy
 import (
 	"net/http"
 
-	"github.com/mouad-eh/wasseet/proxy/request"
+	"github.com/mouad-eh/wasseet/request"
 )
 
 //go:generate moq -pkg mocks -out ../testutils/mocks/backend_client.go .  BackendClient
