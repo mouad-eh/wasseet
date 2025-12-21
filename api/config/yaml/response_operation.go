@@ -6,7 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/api/config"
 )
 
 type IResponseOperation interface {

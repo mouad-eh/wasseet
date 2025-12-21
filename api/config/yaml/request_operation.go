@@ -3,7 +3,7 @@ package yaml
 import (
 	"fmt"
 
-	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/api/config"
 	"github.com/mouad-eh/wasseet/request"
 	"gopkg.in/yaml.v3"
 )

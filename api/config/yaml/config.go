@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mouad-eh/wasseet/api/config"
 	"github.com/mouad-eh/wasseet/loadbalancer"
-	"github.com/mouad-eh/wasseet/proxy/config"
 )
 
 type Config struct {

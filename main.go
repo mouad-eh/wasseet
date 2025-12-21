@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/mouad-eh/wasseet/api/config"
 	"github.com/mouad-eh/wasseet/loadbalancer"
 	"github.com/mouad-eh/wasseet/proxy"
-	"github.com/mouad-eh/wasseet/proxy/config"
 )
 
 func main() {

@@ -8,8 +8,8 @@ import (
 
 	"sync"
 
-	yamlapi "github.com/mouad-eh/wasseet/api/yaml"
-	"github.com/mouad-eh/wasseet/proxy/config"
+	yamlapi "github.com/mouad-eh/wasseet/api/config/yaml"
+	"github.com/mouad-eh/wasseet/api/config"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )

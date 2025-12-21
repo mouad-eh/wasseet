@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	yamlapi "github.com/mouad-eh/wasseet/api/yaml"
+	yamlapi "github.com/mouad-eh/wasseet/api/config/yaml"
 	"github.com/mouad-eh/wasseet/loadbalancer"
-	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/api/config"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )

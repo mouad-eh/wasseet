@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/mouad-eh/wasseet/api/config"
 	"github.com/mouad-eh/wasseet/proxy"
-	"github.com/mouad-eh/wasseet/proxy/config"
 	"github.com/mouad-eh/wasseet/request"
 	"github.com/mouad-eh/wasseet/testutils/mocks"
 	"github.com/stretchr/testify/require"

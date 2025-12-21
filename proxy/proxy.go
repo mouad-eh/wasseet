@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"os"
 
-	yamlapi "github.com/mouad-eh/wasseet/api/yaml"
-	"github.com/mouad-eh/wasseet/proxy/config"
+	"github.com/mouad-eh/wasseet/api/config"
+	yamlapi "github.com/mouad-eh/wasseet/api/config/yaml"
 	"github.com/mouad-eh/wasseet/request"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
