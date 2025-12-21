@@ -8,29 +8,32 @@ import (
 
 	"sync"
 
-	yamlapi "github.com/mouad-eh/wasseet/api/config/yaml"
 	"github.com/mouad-eh/wasseet/api/config"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 )
 
 type ConfigManager struct {
-	mu             sync.RWMutex // to protect the latestVersion and Configs map
-	latestVersion  int
-	configFilePath string
-	configs        map[int]*config.Config // map of config versions
-	logger         *zap.SugaredLogger
+	mu            sync.RWMutex // to protect the latestVersion and Configs map
+	latestVersion int
+	configSrc     config.Source
+	configs       map[int]*config.Config // map of config versions
+	logger        *zap.SugaredLogger
 }
 
-func NewConfigManager(cfg *config.Config, configFilePath string, logger *zap.SugaredLogger) *ConfigManager {
+func NewConfigManager(src config.Source, logger *zap.SugaredLogger) (*ConfigManager, error) {
 	cm := &ConfigManager{
-		latestVersion:  0,
-		configs:        make(map[int]*config.Config),
-		configFilePath: configFilePath,
-		logger:         logger,
+		latestVersion: 0,
+		configs:       make(map[int]*config.Config),
+		configSrc:     src,
+		logger:        logger,
 	}
-	cm.configs[0] = cfg
-	return cm
+	cfg, err := src.Load()
+	if err != nil {
+		logger.Error("Failed to load config:", err)
+		return nil, err
+	}
+	cm.configs[0] = &cfg
+	return cm, nil
 }
 
 // Start starts a new goroutine that listens for SIGHUP signals and reloads the config
@@ -43,7 +46,7 @@ func (cm *ConfigManager) Start(shutdownCh chan struct{}) {
 			case <-shutdownCh:
 				return
 			case <-sigChan:
-				err := cm.LoadConfig()
+				err := cm.reloadConfig()
 				if err != nil {
 					cm.logger.Error("Failed to load config:", err)
 				}
@@ -54,28 +57,16 @@ func (cm *ConfigManager) Start(shutdownCh chan struct{}) {
 	}()
 }
 
-func (cm *ConfigManager) LoadConfig() error {
-	configBytes, err := os.ReadFile(cm.configFilePath)
+func (cm *ConfigManager) reloadConfig() error {
+	cfg, err := cm.configSrc.Load()
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return fmt.Errorf("failed to reload config: %w", err)
 	}
-
-	var yamlConfig yamlapi.Config
-	if err := yaml.Unmarshal(configBytes, &yamlConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal config file: %w", err)
-	}
-
-	err = yamlConfig.Validate()
-	if err != nil {
-		return fmt.Errorf("failed to validate config file: %w", err)
-	}
-
-	config := yamlConfig.Resolve()
 
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	cm.latestVersion++
-	cm.configs[cm.latestVersion] = &config
+	cm.configs[cm.latestVersion] = &cfg
 
 	return nil
 }

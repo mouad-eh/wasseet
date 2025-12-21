@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mouad-eh/wasseet/api/config"
+	"github.com/mouad-eh/wasseet/api/config/yaml"
 	"github.com/mouad-eh/wasseet/loadbalancer"
 	"github.com/mouad-eh/wasseet/proxy"
 	"github.com/stretchr/testify/require"
@@ -393,8 +394,8 @@ func TestYamlConfigLoading(t *testing.T) {
 	defer os.Remove(tempConfigFile.Name())
 
 	// load proxy from config file
-	proxy, err := proxy.NewProxyFromConfigFile(tempConfigFile.Name(), &proxy.HttpClient{Client: &http.Client{}})
-	require.NoError(t, err)
+	configSrc := yaml.Source{Path: tempConfigFile.Name()}
+	proxy := proxy.NewProxy(&configSrc, &proxy.HttpClient{Client: &http.Client{}})
 
 	proxyURL := startProxyAndGetURL(t, proxy)
 	defer proxy.Stop()
@@ -427,9 +428,8 @@ func TestYamlConfigReloading(t *testing.T) {
 	tempConfigFile_v1 := createTempConfigFile(t, templatePath_v1, backendURL)
 
 	// load proxy from v0 config file
-	proxy, err := proxy.NewProxyFromConfigFile(tempConfigFile_v0.Name(), &proxy.HttpClient{Client: &http.Client{}})
-	require.NoError(t, err)
-
+	configSrc_v0 := yaml.Source{Path: tempConfigFile_v0.Name()}
+	proxy := proxy.NewProxy(&configSrc_v0, &proxy.HttpClient{Client: &http.Client{}})
 	proxyURL := startProxyAndGetURL(t, proxy)
 	defer proxy.Stop()
 

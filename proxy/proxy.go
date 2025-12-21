@@ -6,14 +6,11 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/mouad-eh/wasseet/api/config"
-	yamlapi "github.com/mouad-eh/wasseet/api/config/yaml"
 	"github.com/mouad-eh/wasseet/request"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/yaml.v3"
 )
 
 type Proxy struct {
@@ -26,31 +23,7 @@ type Proxy struct {
 	shutdownCh    chan struct{}
 }
 
-func NewProxyFromConfigFile(configFilePath string, bc BackendClient) (*Proxy, error) {
-	configBytes, err := os.ReadFile(configFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var yamlConfig yamlapi.Config
-	if err := yaml.Unmarshal(configBytes, &yamlConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config file: %w", err)
-	}
-
-	err = yamlConfig.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate config file: %w", err)
-	}
-
-	config := yamlConfig.Resolve()
-
-	proxy := NewProxy(&config, bc)
-	proxy.configManager = NewConfigManager(&config, configFilePath, proxy.logger)
-
-	return proxy, nil
-}
-
-func NewProxy(config *config.Config, bc BackendClient) *Proxy {
+func NewProxy(config config.Source, bc BackendClient) *Proxy {
 	loggerConfig := zap.Config{
 		Level:       zap.NewAtomicLevelAt(zap.DebugLevel),
 		Development: true,
@@ -70,7 +43,10 @@ func NewProxy(config *config.Config, bc BackendClient) *Proxy {
 	logger, _ := loggerConfig.Build()
 	sugaredLogger := logger.Sugar()
 	// healthChecker := NewHealthChecker(config.BackendGroups, bc, sugaredLogger)
-	configManager := NewConfigManager(config, "", sugaredLogger)
+	configManager, err := NewConfigManager(config, sugaredLogger)
+	if err != nil {
+		sugaredLogger.Fatalf("failed to create config manager: %v", err)
+	}
 	return &Proxy{
 		server:        &http.Server{},
 		client:        bc,

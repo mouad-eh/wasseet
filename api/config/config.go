@@ -19,6 +19,10 @@ type Config struct {
 	Rules []*Rule
 }
 
+func (c *Config) Load() (Config, error) {
+	return *c, nil
+}
+
 // GetFirstMatchingRule returns an error if there are no rules.
 // We expect user to provide no rules if there is only one backend group, but
 // in this case we should always have default rule that matches all requests.
