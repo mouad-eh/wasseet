@@ -1,12 +1,25 @@
 # Wasseet
 
-**Wasseet (وَسيط)** is an HTTP reverse proxy built in Go. It uses the already existing HTTP server implementation from the `net/http` package and does not implement an HTTP server from scratch tuned for proxying.
+**Wasseet (وَسيط)** is a lightweight, configurable HTTP reverse proxy written in Go. It leverages the standard `net/http` package and provides features like load balancing, request/response rewriting, health checks, and hot configuration reloading.
 
-**Implemented features:** Backend groups, Load balancing, Request and response rewriting, Hot configuration reloading and Backend health checks.
+## Features
 
-**Upcoming features:** Rate limiting, more load balancing algorithms, more request and response operations ...etc.
+- **Backend Groups** - Organize your backend servers into logical groups
+- **Load Balancing** - Distribute traffic across backends (round-robin, least connections)
+- **Request/Response Rewriting** - Modify headers, paths, and query parameters on the fly
+- **Health Checks** - Automatically detect and route around unhealthy backends
+- **Hot Configuration Reloading** - Update configuration without restarting the proxy
+- **Rule-based Routing** - Route requests based on host and path matching
 
-**Config example:**
+## Roadmap
+
+- [ ] Rate limiting
+- [ ] Support for more request/response operations
+- [ ] More load balancing algorithms
+- [ ] Circuit breaker pattern
+- [ ] Metrics and monitoring
+
+## Config example
 
 ```yaml
 port: 8080
@@ -33,3 +46,7 @@ rules:
         header: X-Response-From
         value: proxy
 ```
+
+## Contributing
+
+Contributions from the community are welcome! If you have an idea for a new feature or a bug to fix, please open an issue or submit a pull request.
